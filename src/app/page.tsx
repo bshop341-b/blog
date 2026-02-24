@@ -1,65 +1,129 @@
-import Image from "next/image";
+import fs from "fs";
+import path from "path";
 
-export default function Home() {
+const postsDir = path.join(process.cwd(), "public", "posts");
+
+function getPosts() {
+  if (!fs.existsSync(postsDir)) return [];
+  return fs
+    .readdirSync(postsDir)
+    .filter((file) => file.endsWith(".md"))
+    .map((file) => {
+      const content = fs.readFileSync(path.join(postsDir, file), "utf-8");
+      const slug = file.replace(/\.md$/, "");
+      return { slug, content };
+    })
+    .sort((a, b) => (a.slug < b.slug ? 1 : -1)); // newest first assuming ISO dates
+}
+
+function renderMarkdown(md: string) {
+  return md
+    .trim()
+    .split(/\n\s*\n/)
+    .map((block, idx) => {
+      if (block.startsWith("# ")) {
+        return (
+          <h2 key={idx} className="text-2xl font-semibold text-white">
+            {block.replace(/^#\s*/, "")}
+          </h2>
+        );
+      }
+      if (block.startsWith("- ")) {
+        const items = block
+          .split("\n")
+          .filter(Boolean)
+          .map((item) => item.replace(/^-\s*/, ""));
+        return (
+          <ul key={idx} className="list-disc space-y-1 pl-5 text-zinc-300">
+            {items.map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        );
+      }
+      return (
+        <p key={idx} className="leading-relaxed text-zinc-200">
+          {block}
+        </p>
+      );
+    });
+}
+
+export default function Home({
+  searchParams,
+}: {
+  searchParams: { post?: string };
+}) {
+  const posts = getPosts();
+  const currentIndex = searchParams.post
+    ? posts.findIndex((post) => post.slug === searchParams.post)
+    : 0;
+  const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+  const currentPost = posts[safeIndex];
+  const prev = posts[safeIndex + 1];
+  const next = safeIndex > 0 ? posts[safeIndex - 1] : undefined;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="min-h-screen bg-[#050505] text-white">
+      <div className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-12">
+        <header className="space-y-2 border-b border-white/10 pb-6">
+          <p className="text-xs uppercase tracking-[0.4em] text-zinc-500">Blog</p>
+          <h1 className="text-4xl font-semibold">Build logs & aprendizajes diarios</h1>
+          <p className="text-zinc-400">
+            Lectura ultra minimal: un post Markdown por día, directo desde `/public/posts`.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        </header>
+
+        {currentPost ? (
+          <article className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_0_60px_rgba(15,15,15,0.6)]">
+            <div className="flex items-center justify-between text-sm text-zinc-400">
+              <span>{currentPost.slug}</span>
+              <div className="flex gap-2 text-xs">
+                <a
+                  href={prev ? `/?post=${prev.slug}` : "#"}
+                  aria-disabled={!prev}
+                  className={`rounded-full border px-3 py-1 ${
+                    prev ? "border-white/30 hover:border-white" : "border-white/10 text-zinc-600"
+                  }`}
+                >
+                  ← anterior
+                </a>
+                <a
+                  href={next ? `/?post=${next.slug}` : "#"}
+                  aria-disabled={!next}
+                  className={`rounded-full border px-3 py-1 ${
+                    next ? "border-white/30 hover:border-white" : "border-white/10 text-zinc-600"
+                  }`}
+                >
+                  siguiente →
+                </a>
+              </div>
+            </div>
+            <div className="space-y-4">{renderMarkdown(currentPost.content)}</div>
+          </article>
+        ) : (
+          <p className="text-zinc-400">No hay entradas todavía. Escribe la primera en `public/posts`.</p>
+        )}
+
+        <aside className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-300">
+          <p className="text-xs uppercase tracking-[0.4em] text-zinc-500">Archivo</p>
+          <div className="flex flex-wrap gap-2">
+            {posts.map((post) => (
+              <a
+                key={post.slug}
+                href={`/?post=${post.slug}`}
+                className={`rounded-full border px-3 py-1 ${
+                  currentPost?.slug === post.slug
+                    ? "border-white bg-white/10 text-white"
+                    : "border-white/20 text-zinc-300"
+                }`}
+              >
+                {post.slug}
+              </a>
+            ))}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
